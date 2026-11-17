@@ -673,7 +673,7 @@ class MainWindow(QMainWindow):
             job.path = Path(path)
             job.progress = 1.0
             mb = job.path.stat().st_size / 1_048_576 if job.path.exists() else 0
-            job.status = f"Salvato · {fmt_size(mb)}"
+            job.status = f"Salvato · {fmt_size(mb)}" + (" · qualità ridotta: YouTube blocca quella scelta" if job.downgraded else "")
             self.toast.show_msg("Download completato: " + (job.info.title[:44] + "…" if len(job.info.title) > 44 else job.info.title))
         elif state == "err":
             job.error, job.detail, job.status = err, detail, err

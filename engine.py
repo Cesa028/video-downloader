@@ -141,6 +141,7 @@ class Job:
     path: Path | None = None
     error: str = ""
     detail: str = ""
+    downgraded: bool = False
     cancel: threading.Event = field(default_factory=threading.Event)
 
     @property
@@ -204,18 +205,19 @@ def fetch_info(url: str, browser: str = "") -> tuple[Info, bytes]:
     return info, data
 
 
-def build_opts(job: Job, tmp: Path, hook) -> dict:
+def build_opts(job: Job, tmp: Path, hook, fallback: bool = False) -> dict:
     o = _base_opts(job.browser)
     o.update({"outtmpl": "%(title).150B.%(ext)s", "paths": {"home": str(job.out_dir), "temp": str(tmp)},
               "progress_hooks": [hook], "overwrites": False, "continuedl": False})
     if job.mode == "video":
         h = f"[height<={job.height}]" if job.height else ""
-        o["format"] = f"bv*{h}+ba/b{h}/b"
+        # ripiego (dopo un 403): solo formati "unici" gia' con audio, che YouTube non blocca
+        o["format"] = f"b{h}/b" if fallback else f"bv*{h}+ba/b{h}/b"
         o["format_sort"] = ["res", "vcodec:h264", "acodec:m4a"]     # a parita' di risoluzione preferisce H.264/AAC
         o["merge_output_format"] = "mp4"
         o["postprocessors"] = [{"key": "FFmpegMetadata", "add_metadata": True}]
     else:
-        o["format"] = "ba/b"
+        o["format"] = "b" if fallback else "ba/b"
         pp = [{"key": "FFmpegExtractAudio", "preferredcodec": job.acodec,
                "preferredquality": "0" if job.acodec in LOSSLESS else job.bitrate},
               {"key": "FFmpegMetadata", "add_metadata": True}]
@@ -282,8 +284,18 @@ class DownloadThread(QThread):
         try:
             j.out_dir.mkdir(parents=True, exist_ok=True)
             tmp.mkdir(parents=True, exist_ok=True)
-            with yt_dlp.YoutubeDL(build_opts(j, tmp, self._hook)) as ydl:
-                d = ydl.extract_info(j.info.url, download=True)
+            try:
+                with yt_dlp.YoutubeDL(build_opts(j, tmp, self._hook)) as ydl:
+                    d = ydl.extract_info(j.info.url, download=True)
+            except Exception as e:  # noqa: BLE001
+                if "403" not in str(e) and "file is empty" not in str(e):
+                    raise
+                log.info("403 sul formato scelto, riprovo con il formato unico")
+                self._stream = 0
+                self.progress.emit(0.0, "YouTube blocca questa qualità: riprovo con una più bassa…")
+                j.downgraded = True
+                with yt_dlp.YoutubeDL(build_opts(j, tmp, self._hook, fallback=True)) as ydl:
+                    d = ydl.extract_info(j.info.url, download=True)
             rd = (d.get("requested_downloads") or [{}])[0]
             path = rd.get("filepath") or d.get("filepath") or ""
             if not path or not Path(path).exists():
