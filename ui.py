@@ -1,6 +1,7 @@
 """Video Downloader - finestra principale: link, scelta formato, coda di download, tema e scorciatoie."""
 from __future__ import annotations
 
+import shutil
 from pathlib import Path
 
 from PySide6.QtCore import QByteArray, QRectF, Qt, QUrl, Signal
@@ -17,14 +18,14 @@ import theme
 from common import APP_NAME, fmt_size, log, open_path, reveal, settings
 from dialogs import AboutDialog, ErrorDialog
 from engine import (
-    AUDIO_BITRATES, AUDIO_FORMATS, BROWSERS, LOSSLESS, SITES, DownloadThread, Info, InfoThread, Job, extract_url,
+    AUDIO_BITRATES, AUDIO_FORMATS, BROWSERS, COOKIE_FILE, LOSSLESS, SITES, DownloadThread, Info, InfoThread, Job, extract_url,
     fmt_dur,
 )
 from theme import THEME_LABELS, THEMES, titlebar
 from widgets import ElidedLabel, IconLabel, Badge, Segmented, Toast, Toggle, a11y_pass, label, repolish
 
 THUMB_W, THUMB_H = 224, 126
-BROWSER_LABELS = {"": "Nessuno", "firefox": "Firefox (consigliato)", "edge": "Microsoft Edge (spesso non funziona)",
+BROWSER_LABELS = {"file": "File cookies.txt importato", "": "Nessuno", "firefox": "Firefox (consigliato)", "edge": "Microsoft Edge (spesso non funziona)",
                   "chrome": "Google Chrome (spesso non funziona)", "brave": "Brave (spesso non funziona)"}
 
 
@@ -340,11 +341,18 @@ class MainWindow(QMainWindow):
             tm.addAction(a)
         cm = m.addMenu(icons.icon("globe"), "Cookie del browser (video privati o con limiti di età)")
         self.browser_group = QActionGroup(self)
-        for key in BROWSERS:
+        for key in (k for k in BROWSERS if k != "file"):
             a = QAction(BROWSER_LABELS[key], self, checkable=True, checked=key == self.browser)
             a.triggered.connect(lambda _=False, k=key: self.set_browser(k))
             self.browser_group.addAction(a)
             cm.addAction(a)
+        cm.addSeparator()
+        self.act_file = QAction("Importa un file cookies.txt…", self, checkable=True, checked=self.browser == "file")
+        self.act_file.setToolTip("Il metodo più affidabile con Edge e Chrome: esporta i cookie con un'estensione "
+                                 "del browser (es. «Get cookies.txt LOCALLY») e importa qui il file")
+        self.act_file.triggered.connect(self.import_cookies)
+        self.browser_group.addAction(self.act_file)
+        cm.addAction(self.act_file)
         m.addSeparator()
         m.addAction(icons.icon("info"), "Informazioni, licenza e crediti   F1", lambda: AboutDialog(self).exec())
         return m
@@ -495,7 +503,25 @@ class MainWindow(QMainWindow):
         apply_theme(QApplication.instance(), pref, self.tmp / "ui")
         self._save_prefs()
 
+    def import_cookies(self):
+        f, _ = QFileDialog.getOpenFileName(self, "Scegli il file cookies.txt", str(Path.home() / "Downloads"),
+                                           "Cookie (*.txt);;Tutti i file (*)")
+        if not f:
+            self.act_file.setChecked(self.browser == "file")
+            return
+        try:
+            COOKIE_FILE.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(f, COOKIE_FILE)     # copia privata: il file originale non viene mai modificato
+        except OSError as e:
+            log.error("import cookies: %s", e)
+            self.act_file.setChecked(False)
+            self.toast.show_msg("Non riesco a leggere quel file.")
+            return
+        self.set_browser("file")
+
     def set_browser(self, key: str):
+        if key != "file":
+            COOKIE_FILE.unlink(missing_ok=True)     # non teniamo cookie che non servono piu'
         self.browser = key
         self._save_prefs()
         self.toast.show_msg("Cookie del browser: " + BROWSER_LABELS[key])

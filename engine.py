@@ -19,6 +19,8 @@ from PySide6.QtCore import QThread, Signal
 
 from common import DATA_DIR, log
 
+COOKIE_FILE = DATA_DIR / "cookies.txt"   # copia privata del file importato dall'utente
+
 # usa i certificati di Windows (necessario con antivirus/proxy che ispezionano il traffico HTTPS)
 truststore.inject_into_ssl()
 
@@ -29,7 +31,7 @@ AUDIO_FORMATS = [("MP3", "mp3", "mp3", True), ("M4A (AAC)", "m4a", "m4a", True),
                  ("FLAC (senza perdita)", "flac", "flac", True), ("WAV (senza perdita)", "wav", "wav", False)]
 AUDIO_BITRATES = ["320", "256", "192", "128"]
 LOSSLESS = {"flac", "wav"}
-BROWSERS = ["", "firefox", "edge", "chrome", "brave"]
+BROWSERS = ["", "firefox", "edge", "chrome", "brave", "file"]
 SITES = ["YouTube", "TikTok", "Instagram", "Facebook", "X (Twitter)", "Vimeo", "Reddit", "Twitch", "SoundCloud",
          "Dailymotion", "Pinterest", "Bilibili"]
 
@@ -59,6 +61,11 @@ def find_node() -> str | None:
     return shutil.which("node")
 
 
+LOGIN_MSG = ("Per vedere questo contenuto serve un account. Da Impostazioni → «Cookie del browser» scegli Firefox, "
+             "oppure importa un file cookies.txt esportato dal browser in cui sei connesso (Edge e Chrome non si "
+             "possono leggere direttamente).")
+
+
 def cookie_error(msg: str) -> bool:
     m = msg.lower()
     return any(k in m for k in ("dpapi", "cookies database", "could not copy", "cookie database", "cookies from"))
@@ -84,19 +91,15 @@ def friendly_error(text: str) -> str:
         ("unsupported url", "Questo link non è supportato. Controlla che sia l'indirizzo di un video (non di una "
                             "pagina generica) di un sito supportato."),
         ("is not a valid url", "Questo non sembra un link valido."),
-        ("sign in to confirm", "Il sito sospetta un accesso automatico. Riprova più tardi oppure, da Impostazioni, "
-                               "usa i cookie del browser in cui hai fatto l'accesso."),
-        ("private video", "Il video è privato: serve un account con i permessi per vederlo."),
-        ("logged-in", "Per vedere questo contenuto serve il login. Da Impostazioni puoi usare i cookie del browser "
-                      "in cui hai già fatto l'accesso."),
-        ("requiring login", "Per vedere questo contenuto serve il login. Da Impostazioni puoi usare i cookie del "
-                            "browser in cui hai già fatto l'accesso."),
+        ("sign in to confirm", LOGIN_MSG),
+        ("private video", LOGIN_MSG),
+        ("logged-in", LOGIN_MSG),
+        ("requiring login", LOGIN_MSG),
         ("no video could be found", "In questo post non c'è nessun video da scaricare."),
         ("http error 404", "La pagina non esiste (errore 404): controlla il link."),
-        ("login required", "Per vedere questo contenuto serve il login. Da Impostazioni puoi usare i cookie del "
-                           "browser in cui hai già fatto l'accesso."),
-        ("age-restricted", "Il video ha limiti di età: da Impostazioni usa i cookie del browser in cui hai fatto l'accesso."),
-        ("confirm your age", "Il video ha limiti di età: da Impostazioni usa i cookie del browser in cui hai fatto l'accesso."),
+        ("login required", LOGIN_MSG),
+        ("age-restricted", LOGIN_MSG),
+        ("confirm your age", LOGIN_MSG),
         ("not available in your country", "Il video non è disponibile nel tuo Paese."),
         ("geo", "Il video non è disponibile nel tuo Paese."),
         ("video unavailable", "Il video non è più disponibile (rimosso o reso privato)."),
@@ -168,7 +171,9 @@ def _base_opts(browser: str) -> dict:
         o["ffmpeg_location"] = ff
     if (node := find_node()):
         o["js_runtimes"] = {"node": {"path": node}}
-    if browser:
+    if browser == "file":
+        o["cookiefile"] = str(COOKIE_FILE)
+    elif browser:
         o["cookiesfrombrowser"] = (browser,)
     return o
 
@@ -192,7 +197,7 @@ def fetch_info(url: str, browser: str = "") -> tuple[Info, bytes]:
         with yt_dlp.YoutubeDL(_base_opts(browser)) as ydl:
             d = ydl.extract_info(url, download=False)
     except Exception as e:  # noqa: BLE001
-        if not (browser and cookie_error(str(e))):
+        if not (browser and browser != "file" and cookie_error(str(e))):
             raise
         log.info("cookie del browser non leggibili, riprovo senza")
         with yt_dlp.YoutubeDL(_base_opts("")) as ydl:
@@ -305,7 +310,7 @@ class DownloadThread(QThread):
                     with yt_dlp.YoutubeDL(build_opts(j, tmp, self._hook)) as ydl:
                         d = ydl.extract_info(j.info.url, download=True)
                 except Exception as e:  # noqa: BLE001
-                    if not (j.browser and cookie_error(str(e))):
+                    if not (j.browser and j.browser != "file" and cookie_error(str(e))):
                         raise
                     log.info("cookie del browser non leggibili, riprovo senza")
                     j.browser = ""
