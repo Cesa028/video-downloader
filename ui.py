@@ -353,6 +353,8 @@ class MainWindow(QMainWindow):
         self.act_file.triggered.connect(self.import_cookies)
         self.browser_group.addAction(self.act_file)
         cm.addAction(self.act_file)
+        cm.addSeparator()
+        cm.addAction(icons.icon("info"), "Come esportare i cookie da Chrome o Edge…", self.show_cookie_guide)
         m.addSeparator()
         m.addAction(icons.icon("info"), "Informazioni, licenza e crediti   F1", lambda: AboutDialog(self).exec())
         return m
@@ -502,6 +504,21 @@ class MainWindow(QMainWindow):
         self.theme_pref = pref
         apply_theme(QApplication.instance(), pref, self.tmp / "ui")
         self._save_prefs()
+
+    def show_cookie_guide(self):
+        QMessageBox.information(self, "Esportare i cookie da Chrome o Edge",
+            "Chrome ed Edge proteggono i cookie in un modo che i programmi esterni, incluso questo, non possono "
+            "più leggere direttamente. La soluzione è esportarli tu stesso in un file, con un'estensione del "
+            "browser, e importare qui quel file.\n\n"
+            "1. Nel browser dove sei già connesso al sito, installa un'estensione come «Get cookies.txt LOCALLY» "
+            "(cercala nel negozio estensioni di Chrome o Edge). Lavora in locale: non invia nulla a server esterni.\n"
+            "2. Apri il sito (es. TikTok) e assicurati di essere connesso.\n"
+            "3. Clicca l'icona dell'estensione e scegli Export per salvare il file cookies.txt.\n"
+            "4. Qui nel programma: Impostazioni → Cookie del browser → Importa un file cookies.txt…, e scegli "
+            "quel file.\n\n"
+            "Attenzione: quel file dà accesso al tuo account su quel sito, anche con l'autenticazione a due "
+            "fattori attiva. Non condividerlo, non caricarlo altrove, ed eliminalo dalla cartella Download dopo "
+            "averlo importato: il programma ne tiene comunque una copia separata, che resta solo sul tuo PC.")
 
     def import_cookies(self):
         f, _ = QFileDialog.getOpenFileName(self, "Scegli il file cookies.txt", str(Path.home() / "Downloads"),
