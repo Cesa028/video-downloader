@@ -24,8 +24,8 @@ from theme import THEME_LABELS, THEMES, titlebar
 from widgets import ElidedLabel, IconLabel, Badge, Segmented, Toast, Toggle, a11y_pass, label, repolish
 
 THUMB_W, THUMB_H = 224, 126
-BROWSER_LABELS = {"": "Nessuno", "firefox": "Firefox", "edge": "Microsoft Edge", "chrome": "Google Chrome",
-                  "brave": "Brave"}
+BROWSER_LABELS = {"": "Nessuno", "firefox": "Firefox (consigliato)", "edge": "Microsoft Edge (spesso non funziona)",
+                  "chrome": "Google Chrome (spesso non funziona)", "brave": "Brave (spesso non funziona)"}
 
 
 def write_ui_assets(folder: Path) -> str:

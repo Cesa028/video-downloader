@@ -59,6 +59,11 @@ def find_node() -> str | None:
     return shutil.which("node")
 
 
+def cookie_error(msg: str) -> bool:
+    m = msg.lower()
+    return any(k in m for k in ("dpapi", "cookies database", "could not copy", "cookie database", "cookies from"))
+
+
 def fmt_dur(sec) -> str:
     if not sec:
         return ""
@@ -72,6 +77,10 @@ def friendly_error(text: str) -> str:
     """Messaggio comprensibile (italiano); il testo originale resta nel dettaglio."""
     t = text.lower()
     rules = [
+        ("dpapi", "Non riesco a leggere i cookie di questo browser (Chrome, Edge e Brave li proteggono). "
+                  "Da Impostazioni scegli Firefox oppure «Nessuno»."),
+        ("cookies database", "Non riesco a leggere i cookie del browser scelto: chiudilo e riprova, oppure da "
+                             "Impostazioni scegli «Nessuno»."),
         ("unsupported url", "Questo link non è supportato. Controlla che sia l'indirizzo di un video (non di una "
                             "pagina generica) di un sito supportato."),
         ("is not a valid url", "Questo non sembra un link valido."),
@@ -179,8 +188,15 @@ class _Log:
 
 def fetch_info(url: str, browser: str = "") -> tuple[Info, bytes]:
     """Legge titolo, miniatura e qualità disponibili senza scaricare. Può sollevare eccezioni di yt-dlp."""
-    with yt_dlp.YoutubeDL(_base_opts(browser)) as ydl:
-        d = ydl.extract_info(url, download=False)
+    try:
+        with yt_dlp.YoutubeDL(_base_opts(browser)) as ydl:
+            d = ydl.extract_info(url, download=False)
+    except Exception as e:  # noqa: BLE001
+        if not (browser and cookie_error(str(e))):
+            raise
+        log.info("cookie del browser non leggibili, riprovo senza")
+        with yt_dlp.YoutubeDL(_base_opts("")) as ydl:
+            d = ydl.extract_info(url, download=False)
     if d.get("_type") == "playlist":
         entries = [e for e in (d.get("entries") or []) if e]
         if len(entries) != 1:
@@ -285,8 +301,16 @@ class DownloadThread(QThread):
             j.out_dir.mkdir(parents=True, exist_ok=True)
             tmp.mkdir(parents=True, exist_ok=True)
             try:
-                with yt_dlp.YoutubeDL(build_opts(j, tmp, self._hook)) as ydl:
-                    d = ydl.extract_info(j.info.url, download=True)
+                try:
+                    with yt_dlp.YoutubeDL(build_opts(j, tmp, self._hook)) as ydl:
+                        d = ydl.extract_info(j.info.url, download=True)
+                except Exception as e:  # noqa: BLE001
+                    if not (j.browser and cookie_error(str(e))):
+                        raise
+                    log.info("cookie del browser non leggibili, riprovo senza")
+                    j.browser = ""
+                    with yt_dlp.YoutubeDL(build_opts(j, tmp, self._hook)) as ydl:
+                        d = ydl.extract_info(j.info.url, download=True)
             except Exception as e:  # noqa: BLE001
                 if "403" not in str(e) and "file is empty" not in str(e):
                     raise
