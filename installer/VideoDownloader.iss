@@ -2,7 +2,7 @@
 ; Non compilare a mano: lo fa build.py, che passa la versione con /DAppVersion=...
 
 #ifndef AppVersion
-  #define AppVersion "1.0.0"
+  #define AppVersion "1.0.1"
 #endif
 #define AppName "Video Downloader"
 #define AppExe "VideoDownloader.exe"

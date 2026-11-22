@@ -7,7 +7,7 @@ Applicazione per Windows 10/11 (64 bit), con tema chiaro e scuro. Funziona con Y
 > Scarica solo contenuti che hai il diritto di salvare (tuoi, con licenza libera o con il permesso dell'autore).
 
 ## Download
-L'installer è nella sezione **Releases** del repository: scarica `VideoDownloader-Setup-1.0.0.exe` ed eseguilo (non servono diritti di amministratore).
+L'installer è nella sezione **Releases** del repository: scarica `VideoDownloader-Setup-1.0.1.exe` ed eseguilo (non servono diritti di amministratore).
 
 ## Come si usa
 1. Incolla il link (o premi **Incolla**, o trascina il link nella finestra).

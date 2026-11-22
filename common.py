@@ -11,7 +11,7 @@ from pathlib import Path
 from PySide6.QtCore import QSettings
 
 APP_NAME = "Video Downloader"
-APP_VERSION = "1.0.0"
+APP_VERSION = "1.0.1"
 APP_AUTHOR = "Cesa028"
 APP_URL = "https://github.com/Cesa028/video-downloader"
 FROZEN = bool(getattr(sys, "frozen", False))
